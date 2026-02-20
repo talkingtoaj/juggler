@@ -1,0 +1,17 @@
+[project]
+name = "context-switcher"
+version = "0.1.0"
+description = "A Windows window manager with context notes"
+requires-python = ">=3.11"
+dependencies = [
+    "PyQt6>=6.6.0",
+    "pillow>=10.0.0",
+]
+
+[project.optional-dependencies]
+windows = [
+    "pywin32>=306",
+]
+dev = [
+    "pytest>=7.0",
+]
