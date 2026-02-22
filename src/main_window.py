@@ -7,6 +7,16 @@ import platform
 from datetime import datetime
 from typing import Optional
 
+# Windows API for global hotkey polling
+_WINDOWS_API_AVAILABLE = False
+if platform.system() == "Windows":
+    try:
+        import win32api
+        import win32gui
+        _WINDOWS_API_AVAILABLE = True
+    except ImportError:
+        pass
+
 # PyQt6 imports
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -20,9 +30,10 @@ from PyQt6.QtGui import QAction, QIcon, QColor, QPalette, QBrush
 # Our imports
 from .window_manager import WindowManager, filter_system_windows
 from .data_store import (
-    get_pinned_windows, save_pinned_windows, 
+    get_pinned_windows, save_pinned_windows,
     add_pinned_window, remove_pinned_window, update_pinned_window,
-    get_settings, save_settings
+    get_settings, save_settings,
+    get_last_activated_index, set_last_activated_index
 )
 
 
@@ -291,9 +302,14 @@ class MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
+        self._hotkey_timer = None
+        self._hotkey_cooldown = False
         self.setup_ui()
         self.load_pinned_windows()
         self.check_window_validity()
+        # Start Win+O hotkey polling after the event loop is running
+        if _WINDOWS_API_AVAILABLE:
+            QTimer.singleShot(1000, self._start_hotkey_polling)
         
     def setup_ui(self):
         """Build the main UI."""
@@ -525,8 +541,72 @@ class MainWindow(QMainWindow):
             "<p>Version 0.1.0</p>"
         )
     
+    def _start_hotkey_polling(self):
+        """Start polling for Win+O hotkey using GetAsyncKeyState."""
+        self._hotkey_timer = QTimer()
+        self._hotkey_timer.timeout.connect(self._check_hotkey)
+        self._hotkey_timer.start(50)  # Check every 50ms
+
+    def _check_hotkey(self):
+        """Check if Win+O is pressed; if so, cycle to next pinned window."""
+        try:
+            # If in cooldown, wait until Win key is released before re-triggering
+            if self._hotkey_cooldown:
+                lwin = win32api.GetAsyncKeyState(0x5B) & 0x8000
+                rwin = win32api.GetAsyncKeyState(0x5C) & 0x8000
+                if not lwin and not rwin:
+                    self._hotkey_cooldown = False
+                return
+
+            win_held = bool(win32api.GetAsyncKeyState(0x5B) & 0x8000) or \
+                       bool(win32api.GetAsyncKeyState(0x5C) & 0x8000)
+            # Bit 0 of GetAsyncKeyState = key was pressed since last call (edge detect)
+            o_just_pressed = bool(win32api.GetAsyncKeyState(0x4F) & 0x0001)
+
+            if win_held and o_just_pressed:
+                self._hotkey_cooldown = True
+                self.cycle_and_activate_window()
+        except Exception:
+            pass
+
+    def cycle_and_activate_window(self):
+        """Cycle to the next valid pinned window and activate it."""
+        pinned = get_pinned_windows()
+        if not pinned:
+            return
+
+        last_index = get_last_activated_index()
+
+        # Find next valid window starting after last_index
+        n = len(pinned)
+        for offset in range(1, n + 1):
+            next_index = (last_index + offset) % n
+            window = pinned[next_index]
+            hwnd = window.get("hwnd")
+            if not hwnd:
+                continue
+            try:
+                if not win32gui.IsWindow(hwnd):
+                    continue
+                # Bring target window to foreground without showing our app
+                foreground_hwnd = win32gui.GetForegroundWindow()
+                target_thread = win32gui.GetWindowThreadProcessId(hwnd)[0]
+                if foreground_hwnd:
+                    fg_thread = win32gui.GetWindowThreadProcessId(foreground_hwnd)[0]
+                    win32gui.AttachThreadInput(fg_thread, target_thread, True)
+                win32gui.SetForegroundWindow(hwnd)
+                if foreground_hwnd:
+                    win32gui.AttachThreadInput(fg_thread, target_thread, False)
+                set_last_activated_index(next_index)
+                self.statusBar().showMessage(f"Switched to: {window.get('title', 'Unknown')[:40]}")
+                return
+            except Exception:
+                continue
+
     def closeEvent(self, event):
         """Handle window close."""
+        if self._hotkey_timer is not None:
+            self._hotkey_timer.stop()
         event.accept()
 
 
