@@ -7,13 +7,28 @@ import platform
 from datetime import datetime
 from typing import Optional
 
-# Windows API for global hotkey polling
+# Windows API for global hotkey
 _WINDOWS_API_AVAILABLE = False
 if platform.system() == "Windows":
     try:
+        import ctypes
         import win32api
         import win32gui
+        import win32con
         _WINDOWS_API_AVAILABLE = True
+
+        class _MSG(ctypes.Structure):
+            """Windows MSG struct layout on 64-bit for nativeEvent parsing."""
+            _fields_ = [
+                ("hwnd",    ctypes.c_size_t),
+                ("message", ctypes.c_uint),
+                ("_pad",    ctypes.c_uint),      # alignment padding before WPARAM
+                ("wParam",  ctypes.c_size_t),
+                ("lParam",  ctypes.c_ssize_t),
+                ("time",    ctypes.c_uint),
+                ("pt_x",    ctypes.c_long),
+                ("pt_y",    ctypes.c_long),
+            ]
     except ImportError:
         pass
 
@@ -98,85 +113,69 @@ class PinnedWindowItem(QFrame):
     def setup_ui(self):
         """Build the UI for this item."""
         self.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
-        
-        # Get the color for background
+
         bg_color = self.window_data.get("color", COLORS[0])
-        
-        # Set background color
-        self.setStyleSheet(f"background-color: {bg_color}; border-radius: 8px;")
-        
-        # Main layout - color bar + content + delete button
+        self.setStyleSheet(f"QFrame {{ background-color: {bg_color}; border-radius: 8px; }}")
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        
-        # Color indicator bar on the left (clickable to activate)
-        self.color_bar = QFrame()
-        self.color_bar.setFixedWidth(12)
-        self.color_bar.setStyleSheet(f"background-color: {bg_color}; border-radius: 8px 0 0 8px;")
-        self.color_bar.setCursor(Qt.CursorShape.PointingHandCursor)
-        # Override mouse press to activate
-        self.color_bar.mousePressEvent = self._handle_click
-        layout.addWidget(self.color_bar)
-        
-        # Window info (title clickable to activate, note is for editing)
-        info_widget = QWidget()
-        info_layout = QVBoxLayout(info_widget)
-        info_layout.setContentsMargins(12, 10, 8, 10)
-        info_layout.setSpacing(4)
-        
-        # Title (clickable to activate)
-        title = self.window_data.get("title", "Unknown")
-        if len(title) > 50:
-            title = title[:47] + "..."
-        self.title_label = QLabel(title)
-        self.title_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #000000;")
-        self.title_label.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.title_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        # Click on title activates window
-        self.title_label.mousePressEvent = self._handle_click
-        info_layout.addWidget(self.title_label)
-        
-        # Note (editable - clicking does NOT activate, just lets you type)
-        self.note_edit = QLineEdit()
-        self.note_edit.setPlaceholderText("Add a note...")
-        self.note_edit.setText(self.window_data.get("note", ""))
-        self.note_edit.setStyleSheet("""
-            background: transparent; 
-            border: none; 
-            color: #1a237e;
-            font-size: 12px;
-        """)
-        # Auto-save note when text changes
-        self.note_edit.textChanged.connect(lambda text: self.note_edited.emit(self.hwnd, text))
-        # Note: clicking on note field does NOT trigger activation - that's the default behavior
-        info_layout.addWidget(self.note_edit)
-        
-        layout.addWidget(info_widget, 4)  # Takes ~80% of space
-        
-        # Delete button (fixed width ~20%, right justified)
+
+        # Delete button on the left — always visible
         self.delete_btn = QPushButton("✕")
-        self.delete_btn.setFixedWidth(80)
+        self.delete_btn.setFixedWidth(34)
         self.delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.delete_btn.setStyleSheet("""
-            QPushButton { 
-                border: none; 
-                background-color: rgba(255,255,255,150);
+            QPushButton {
+                border: none;
+                background: transparent;
                 color: #c62828;
-                font-size: 18px;
+                font-size: 13px;
                 font-weight: bold;
-                border-radius: 0 8px 8px 0;
-                margin: 8px 0;
+                border-radius: 8px 0 0 8px;
             }
-            QPushButton:hover { 
+            QPushButton:hover {
                 background-color: #FF6B6B;
                 color: white;
             }
         """)
         self.delete_btn.clicked.connect(lambda: self.deleted.emit(self.hwnd))
-        layout.addWidget(self.delete_btn)  # Fixed width, right side
-        
-        # Make the whole item clickable
+        layout.addWidget(self.delete_btn)
+
+        # Window info: title + note
+        info_widget = QWidget()
+        info_widget.setStyleSheet("background: transparent;")
+        info_layout = QVBoxLayout(info_widget)
+        info_layout.setContentsMargins(4, 10, 12, 10)
+        info_layout.setSpacing(4)
+
+        title = self.window_data.get("title", "Unknown")
+        if len(title) > 50:
+            title = title[:47] + "..."
+        self.title_label = QLabel(title)
+        self.title_label.setStyleSheet(
+            "font-weight: bold; font-size: 13px; color: #000000; background: transparent;"
+        )
+        self.title_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.title_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.title_label.mousePressEvent = self._handle_click
+        info_layout.addWidget(self.title_label)
+
+        self.note_edit = QLineEdit()
+        self.note_edit.setPlaceholderText("Add a note...")
+        self.note_edit.setText(self.window_data.get("note", ""))
+        self.note_edit.setStyleSheet("""
+            QLineEdit {
+                background: transparent;
+                border: none;
+                color: #1a237e;
+                font-size: 12px;
+            }
+        """)
+        self.note_edit.textChanged.connect(lambda text: self.note_edited.emit(self.hwnd, text))
+        info_layout.addWidget(self.note_edit)
+
+        layout.addWidget(info_widget)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
     
     def _handle_click(self, event):
@@ -192,12 +191,17 @@ class PinnedWindowItem(QFrame):
     
     def update_valid_state(self, is_valid: bool):
         """Update visual state based on window validity."""
+        bg_color = self.window_data.get("color", COLORS[0])
         if is_valid:
-            self.setStyleSheet("background-color: #fff;")
-            self.title_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #000;")
+            self.setStyleSheet(f"QFrame {{ background-color: {bg_color}; border-radius: 8px; }}")
+            self.title_label.setStyleSheet(
+                "font-weight: bold; font-size: 13px; color: #000000; background: transparent;"
+            )
         else:
-            self.setStyleSheet("background-color: #ffebee;")
-            self.title_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #999; text-decoration: line-through;")
+            self.setStyleSheet("QFrame { background-color: #ffebee; border-radius: 8px; }")
+            self.title_label.setStyleSheet(
+                "font-weight: bold; font-size: 13px; color: #999; text-decoration: line-through; background: transparent;"
+            )
 
 
 class WindowPickerDialog(QDialog):
@@ -302,14 +306,15 @@ class MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        self._hotkey_timer = None
+        self._hotkey_id = 1
+        self._hotkey_timer = None   # fallback polling timer
         self._hotkey_cooldown = False
         self.setup_ui()
         self.load_pinned_windows()
         self.check_window_validity()
-        # Start Win+O hotkey polling after the event loop is running
+        # Register Win+O hotkey after the event loop is running and window is shown
         if _WINDOWS_API_AVAILABLE:
-            QTimer.singleShot(1000, self._start_hotkey_polling)
+            QTimer.singleShot(1000, self._register_hotkey)
         
     def setup_ui(self):
         """Build the main UI."""
@@ -331,27 +336,33 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
         
-        # Header
+        # Header row with + button on the right
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
         header = QLabel("Pinned Windows")
         header.setStyleSheet("font-size: 18px; font-weight: bold; color: #333;")
-        layout.addWidget(header)
-        
-        # Add button
-        add_btn = QPushButton("+ Add Window")
+        header_row.addWidget(header)
+        header_row.addStretch()
+        add_btn = QPushButton("+")
+        add_btn.setFixedSize(36, 36)
         add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        add_btn.setStyleSheet(
-            "QPushButton {"
-            "  background-color: #4ECDC4;"
-            "  color: white;"
-            "  border: none;"
-            "  padding: 10px;"
-            "  border-radius: 6px;"
-            "  font-size: 14px;"
-            "}"
-            "QPushButton:hover { background-color: #3DBDB5; }"
-        )
+        add_btn.setToolTip("Add Window")
+        add_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2E7D32;
+                color: white;
+                border: none;
+                border-radius: 18px;
+                font-size: 22px;
+                font-weight: bold;
+                padding-bottom: 2px;
+            }
+            QPushButton:hover { background-color: #388E3C; }
+            QPushButton:pressed { background-color: #1B5E20; }
+        """)
         add_btn.clicked.connect(self.show_window_picker)
-        layout.addWidget(add_btn)
+        header_row.addWidget(add_btn)
+        layout.addLayout(header_row)
         
         # Scroll area for pinned windows
         scroll = QScrollArea()
@@ -541,31 +552,51 @@ class MainWindow(QMainWindow):
             "<p>Version 0.1.0</p>"
         )
     
+    def _register_hotkey(self):
+        """Register Win+O as a global hotkey via RegisterHotKey."""
+        try:
+            hwnd = int(self.winId())
+            try:
+                win32gui.UnregisterHotKey(hwnd, self._hotkey_id)
+            except Exception:
+                pass
+            # MOD_WIN=0x0008, VK_O=0x4F
+            success = win32gui.RegisterHotKey(hwnd, self._hotkey_id, 0x0008, 0x4F)
+            if not success:
+                # Fall back to polling if OS rejected the hotkey registration
+                self._start_hotkey_polling()
+        except Exception:
+            self._start_hotkey_polling()
+
+    def nativeEvent(self, eventType, message):
+        """Catch WM_HOTKEY messages from RegisterHotKey."""
+        if _WINDOWS_API_AVAILABLE and eventType == b"windows_generic_MSG":
+            try:
+                msg = _MSG.from_address(int(message))
+                if msg.message == 0x0312 and msg.wParam == self._hotkey_id:  # WM_HOTKEY
+                    self.cycle_and_activate_window()
+                    return True, 0
+            except Exception:
+                pass
+        return super().nativeEvent(eventType, message)
+
     def _start_hotkey_polling(self):
-        """Start polling for Win+O hotkey using GetAsyncKeyState."""
+        """Fallback: poll Win+O via GetAsyncKeyState when RegisterHotKey fails."""
         self._hotkey_timer = QTimer()
         self._hotkey_timer.timeout.connect(self._check_hotkey)
-        self._hotkey_timer.start(50)  # Check every 50ms
+        self._hotkey_timer.start(50)
 
     def _check_hotkey(self):
-        """Check if Win+O is pressed; if so, cycle to next pinned window."""
+        """Fallback hotkey check using held-key state (bit 15)."""
         try:
-            # If in cooldown, wait until Win key is released before re-triggering
-            if self._hotkey_cooldown:
-                lwin = win32api.GetAsyncKeyState(0x5B) & 0x8000
-                rwin = win32api.GetAsyncKeyState(0x5C) & 0x8000
-                if not lwin and not rwin:
-                    self._hotkey_cooldown = False
-                return
-
             win_held = bool(win32api.GetAsyncKeyState(0x5B) & 0x8000) or \
                        bool(win32api.GetAsyncKeyState(0x5C) & 0x8000)
-            # Bit 0 of GetAsyncKeyState = key was pressed since last call (edge detect)
-            o_just_pressed = bool(win32api.GetAsyncKeyState(0x4F) & 0x0001)
-
-            if win_held and o_just_pressed:
+            o_held = bool(win32api.GetAsyncKeyState(0x4F) & 0x8000)
+            if win_held and o_held and not self._hotkey_cooldown:
                 self._hotkey_cooldown = True
                 self.cycle_and_activate_window()
+            elif not (win_held and o_held):
+                self._hotkey_cooldown = False
         except Exception:
             pass
 
@@ -576,8 +607,6 @@ class MainWindow(QMainWindow):
             return
 
         last_index = get_last_activated_index()
-
-        # Find next valid window starting after last_index
         n = len(pinned)
         for offset in range(1, n + 1):
             next_index = (last_index + offset) % n
@@ -588,15 +617,18 @@ class MainWindow(QMainWindow):
             try:
                 if not win32gui.IsWindow(hwnd):
                     continue
-                # Bring target window to foreground without showing our app
+                # Restore if minimized
+                if win32gui.IsIconic(hwnd):
+                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
+                # Bring to foreground
                 foreground_hwnd = win32gui.GetForegroundWindow()
-                target_thread = win32gui.GetWindowThreadProcessId(hwnd)[0]
+                tgt_thread = win32gui.GetWindowThreadProcessId(hwnd)[0]
                 if foreground_hwnd:
                     fg_thread = win32gui.GetWindowThreadProcessId(foreground_hwnd)[0]
-                    win32gui.AttachThreadInput(fg_thread, target_thread, True)
+                    win32gui.AttachThreadInput(fg_thread, tgt_thread, True)
                 win32gui.SetForegroundWindow(hwnd)
                 if foreground_hwnd:
-                    win32gui.AttachThreadInput(fg_thread, target_thread, False)
+                    win32gui.AttachThreadInput(fg_thread, tgt_thread, False)
                 set_last_activated_index(next_index)
                 self.statusBar().showMessage(f"Switched to: {window.get('title', 'Unknown')[:40]}")
                 return
@@ -605,6 +637,11 @@ class MainWindow(QMainWindow):
 
     def closeEvent(self, event):
         """Handle window close."""
+        if _WINDOWS_API_AVAILABLE:
+            try:
+                win32gui.UnregisterHotKey(int(self.winId()), self._hotkey_id)
+            except Exception:
+                pass
         if self._hotkey_timer is not None:
             self._hotkey_timer.stop()
         event.accept()
