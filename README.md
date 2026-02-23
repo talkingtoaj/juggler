@@ -1,238 +1,89 @@
-# Context Switcher
+# 🐙 Context Switcher
 
-_A Windows window manager with context notes._
-
-## Overview
-
-This is an MVP desktop utility that lets you:
-1. Curate a list of currently-open windows (not *all* windows - just the ones relevant to your current task)
-2. Add brief context notes to each ("Debugging auth flow", "Chapter 3 draft", etc.)
-3. One-click to switch focus to any window
-4. Optional: Mini floating widget for quick access
-
-**Icon:** 🐙 [icon.png](./icon.png) — A cheerful octopus juggling multiple app windows, because managing chaos with a smile is the vibe.
-
-## Problem It Solves
-
-Agentic engineering = many terminals, browsers, editors open simultaneously. It's hard to remember which windows belong to which mental context. This is a lightweight "mission control" for your workflow.
+A lightweight Windows utility that keeps a curated list of your open windows with personal notes, so you can switch between them instantly — without hunting through the taskbar.
 
 ---
 
-## 🚀 Next Steps (Priority Order)
+## Features
 
-### 1. Spike: Verify Window API Works (30 min)
-**Goal:** Confirm `win32gui` can reliably enumerate and activate windows in AJ's environment.
-
-Create `spike_window_api.py`:
-- List all visible windows with titles
-- Try activating a few common ones (VS Code, Chrome, Terminal)
-- Test `SetForegroundWindow()` behavior
-- Document any quirks
-
-### 2. Project Skeleton (1 hour)
-**Goal:** Working PyQt6 window with basic layout.
-
-Create `main.py`:
-- PyQt6 application shell
-- Main window with list widget
-- "+" button placeholder
-- JSON save/load scaffold
-- Single-instance check (prevent multiple copies)
-
-### 3. Window Picker Dialog (2 hours)
-**Goal:** "+" button opens picker of currently open windows.
-
-- Enumerate visible windows via `win32gui`
-- Filter out the app itself, desktop, etc.
-- Show list: icon (if possible) + title
-- Click to "pin" window (save hwnd + title + random color)
-- Add to main list
-
-### 4. Core List Functionality (2 hours)
-**Goal:** Pinned items work end-to-end.
-
-- Display pinned windows: color bar, title, editable note
-- Click item → `ShowWindow()` + `SetForegroundWindow()`
-- Delete item (with confirmation)
-- Auto-save JSON on changes
-- Handle stale hwnd gracefully ("Window not found" message)
-
-### 5. Mini Floating Widget (2 hours)
-**Goal:** Optional draggable mini button.
-
-- Toggle in menu/settings
-- Frameless, always-on-top, draggable
-- Position persistence
-- Click → toggle main window visibility
-- Right-click → context menu (Exit, Show Main, Disable Widget)
-
-### 6. Polish & Ship (1 hour)
-**Goal:** Usable daily driver.
-
-- Random color assignment (pastel palette)
-- Better error messages
-- Taskbar/system tray integration
-- Test on AJ's actual workflow
-- Package for easy launch (shortcut + icon)
+- **Pin any open window** with a colour-coded card
+- **Add a note** to each card ("debugging auth", "chapter 3", etc.)
+- **Click a card** to bring that window to the foreground
+- **Ctrl+Alt+O** to cycle to the next pinned window from anywhere — no need to open the app
+- Closed windows are automatically removed from the list
 
 ---
 
-## Technical Research Summary
+## Installation (Windows)
 
-### ✅ Feasible (confirmed via research)
+### Option A — Automatic installer (recommended)
 
-| Feature | Approach | Complexity |
-|---------|----------|------------|
-| **List open windows** | `win32gui.EnumWindows()` + `IsWindowVisible()` | Low |
-| **Get window titles** | `win32gui.GetWindowText(hwnd)` | Low |
-| **Activate/focus window** | `win32gui.SetForegroundWindow(hwnd)` | Low |
-| **Store window handle** | Save `hwnd` (integer) + validate on use | Low |
-| **UI Framework** | PyQt6 or tkinter | Medium |
-| **Floating widget** | `Qt.WindowStaysOnTopHint` + `FramelessWindowHint` | Medium |
-| **Drag to move** | Mouse event handlers | Low |
+1. Download `ContextSwitcher.exe` and `install.ps1` from the [latest release](../../releases/latest)
+2. Put both files in the same folder
+3. Right-click `install.ps1` → **Run with PowerShell**
 
-### ⚠️ Technical Challenges Identified
+The installer will:
+- Copy `ContextSwitcher.exe` to `%LOCALAPPDATA%\Programs\ContextSwitcher\`
+- Add it to **Windows startup** (runs when you log in)
+- Create a **Desktop shortcut**
 
-1. **Window persistence**: Window handles (`hwnd`) can become invalid if apps close/reopen. Need to:
-   - Store window title as backup identifier
-   - Gracefully handle "window no longer exists"
-   - Allow user to "refresh" or re-link if hwnd is stale
+### Option B — Manual
 
-2. **Window focus restrictions**: Windows security can block `SetForegroundWindow()` unless:
-   - The calling process is already foreground, OR
-   - Use `ShowWindow(hwnd, 5)` + `SetForegroundWindow()` combo (shown to work)
-   - May need `Alt` key simulation in edge cases
+1. Download `ContextSwitcher.exe` from the [latest release](../../releases/latest)
+2. Copy it anywhere you like (e.g. `C:\Users\<you>\Programs\ContextSwitcher\`)
+3. Double-click to run
 
-3. **Mini widget positioning**: Need to store position across restarts (user preference)
-
-4. **UI state management**: 
-   - Main window (list view) vs mini widget toggle
-   - Editable notes that save immediately
-   - Random color assignment per item (store in JSON)
-
-5. **Single instance**: Should probably only allow one instance of the app running
-
-### 🛠️ Stack
-
-- **Python 3.11+**
-- **PyQt6** (UI framework)
-- **pywin32** (Windows API access — Windows only)
-- **uv** for dependency management
-
-### Platform Note
-
-**This app requires native Windows** because it uses `win32gui` to control Windows windows. It cannot run in WSL.
-
-**Development approach:**
-1. Build/test the spike on native Windows
-2. Develop UI code in WSL if preferred (PyQt6 is cross-platform)
-3. Always test window management features on native Windows
+To add to startup manually: press `Win+R`, type `shell:startup`, and paste a shortcut to the exe there.
 
 ---
 
-## MVP Feature Set
+## Usage
 
-### v0.1 (MVP)
-- [x] App icon designed (octopus mascot)
-- [ ] Spike: Window API verification
-- [ ] Main window with list of "pinned" windows
-- [ ] "+" button opens picker showing currently open windows
-- [ ] Each pinned item: color bar, window title, editable note text
-- [ ] Click item = `SetForegroundWindow()` to activate
-- [ ] Delete item from list
-- [ ] Save/load JSON (window hwnd, title, note, color)
-- [ ] Mini floating button (toggle show/hide main window)
+1. Launch Context Switcher
+2. Click the **+** button to add windows you want to track
+3. Type a note on any card to remind yourself what you're doing there
+4. Click a card to jump to that window, or press **Ctrl+Alt+O** from anywhere
 
-### v0.2 (Nice to have)
-- [ ] Drag-and-drop reordering
-- [ ] "Refresh" button to update window titles
-- [ ] Auto-detect if window closed (gray out item)
-- [ ] Color picker instead of random
-- [ ] Global hotkey to show/hide
-- [ ] Named "sessions" (save/restore sets)
+### Keyboard shortcut
+
+| Shortcut | Action |
+|----------|--------|
+| `Ctrl+Alt+O` | Cycle to the next pinned window (works globally, app can be in background) |
+| `F5` | Refresh — removes any closed windows from the list |
+| `Ctrl+Q` | Quit |
 
 ---
 
-## Data Structure
+## Uninstall
 
-```json
-{
-  "pinned_windows": [
-    {
-      "hwnd": 131844,
-      "title": "story.py - VS Code",
-      "note": "Working on Chapter 3",
-      "color": "#4A90D9",
-      "added_at": "2026-02-20T14:30:00"
-    }
-  ],
-  "mini_widget": {
-    "enabled": true,
-    "x": 1800,
-    "y": 50
-  }
-}
+Run `install.ps1` again and choose **Uninstall**, or manually:
+1. Delete `%LOCALAPPDATA%\Programs\ContextSwitcher\`
+2. Delete the Desktop shortcut
+3. Open Task Manager → Startup apps → disable Context Switcher
+
+---
+
+## Build from source
+
+Requirements: Windows, [uv](https://github.com/astral-sh/uv), Python 3.11+
+
+```powershell
+git clone https://github.com/talkingtoaj/context-switcher.git
+cd context-switcher
+uv run python main.py
+```
+
+To build a standalone `.exe`:
+
+```powershell
+uv run --with pyinstaller --with pywin32 --with PyQt6 --with pillow pyinstaller `
+    --onefile --noconsole --icon=icon2.ico `
+    --add-data "icon.png;." --add-data "icon2.png;." --add-data "icon2.ico;." `
+    --name ContextSwitcher main.py
 ```
 
 ---
 
-## UX Design
+## Data
 
-### Main Window Layout
-```
-┌─────────────────────────────────────┐
-│  🐙 Context Switcher       [_][X] │
-├─────────────────────────────────────┤
-│  ┌─────┐                            │
-│  │  +  │  Add current window         │
-│  └─────┘                            │
-├─────────────────────────────────────┤
-│  █ Story.py - VS Code        [×]   │
-│    "Chapter 3 draft"                 │
-│                                      │
-│  █ Terminal - WSL              [×]   │
-│    "Running dev server"              │
-│                                      │
-│  █ Chrome - Stack Overflow     [×]   │
-│    "Research: window API"              │
-└─────────────────────────────────────┘
-```
-
-### Mini Widget
-- Small circular button (40x40px) with octopus icon
-- Frameless, always-on-top, draggable
-- Top-right default position
-- Click → toggle main window visibility
-- Right-click → context menu (Exit, Show Main, Disable Mini)
-
----
-
-## File Structure
-
-```
-projects/context-switcher/
-├── README.md           # This file
-├── icon.png            # App icon (octopus mascot)
-├── pyproject.toml      # Dependencies (uv)
-├── main.py             # Application entry point
-├── spike_window_api.py # API verification script
-└── src/
-    ├── __init__.py
-    ├── window_manager.py   # win32gui wrapper
-    ├── main_window.py      # PyQt6 main UI
-    ├── picker_dialog.py    # Window picker
-    ├── mini_widget.py      # Floating button
-    └── data_store.py       # JSON persistence
-```
-
----
-
-## Open Questions
-
-1. Should clicking the mini widget open the main window or a compact dropdown?
-2. What happens if a window is minimized when you click it? (Should restore first via `ShowWindow`)
-3. Should we exclude certain window types? (Taskbar, system trays, etc.)
-
----
-
-*Ready to start? Begin with the spike script to verify the core window API works in your environment.*
+Settings and pinned windows are saved to `%USERPROFILE%\.context-switcher\data.json`.
