@@ -115,15 +115,13 @@ def save_settings(settings: Dict[str, Any]) -> bool:
 
 
 def get_last_activated_index() -> int:
-    """Get the index of the last activated window for hotkey cycling."""
+    """Return the index of the last Win+O activated window (-1 if none)."""
     data = load_data()
     return data.get("settings", {}).get("last_activated_index", -1)
 
 
 def set_last_activated_index(index: int) -> bool:
-    """Set the index of the last activated window."""
+    """Persist the last Win+O activated window index."""
     data = load_data()
-    if "settings" not in data:
-        data["settings"] = {}
-    data["settings"]["last_activated_index"] = index
+    data.setdefault("settings", {})["last_activated_index"] = index
     return save_data(data)

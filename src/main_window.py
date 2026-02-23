@@ -7,30 +7,23 @@ import platform
 from datetime import datetime
 from typing import Optional
 
-# Windows API for global hotkey
-_WINDOWS_API_AVAILABLE = False
-if platform.system() == "Windows":
-    try:
-        import ctypes
-        import win32api
-        import win32gui
-        import win32con
-        _WINDOWS_API_AVAILABLE = True
+# Windows API — imported lazily inside methods to avoid crash-at-import in frozen exe
+_win32api = None
+_win32gui = None
+_win32con = None
 
-        class _MSG(ctypes.Structure):
-            """Windows MSG struct layout on 64-bit for nativeEvent parsing."""
-            _fields_ = [
-                ("hwnd",    ctypes.c_size_t),
-                ("message", ctypes.c_uint),
-                ("_pad",    ctypes.c_uint),      # alignment padding before WPARAM
-                ("wParam",  ctypes.c_size_t),
-                ("lParam",  ctypes.c_ssize_t),
-                ("time",    ctypes.c_uint),
-                ("pt_x",    ctypes.c_long),
-                ("pt_y",    ctypes.c_long),
-            ]
-    except ImportError:
-        pass
+def _load_win32():
+    global _win32api, _win32gui, _win32con
+    if _win32api is not None:
+        return True
+    try:
+        import win32api, win32gui, win32con
+        _win32api = win32api
+        _win32gui = win32gui
+        _win32con = win32con
+        return True
+    except Exception:
+        return False
 
 # PyQt6 imports
 from PyQt6.QtWidgets import (
@@ -303,18 +296,19 @@ class WindowPickerDialog(QDialog):
 
 class MainWindow(QMainWindow):
     """Main application window."""
-    
+
+    _hotkey_signal = pyqtSignal()  # emitted from hotkey thread → main thread
+
     def __init__(self):
         super().__init__()
-        self._hotkey_id = 1
-        self._hotkey_timer = None   # fallback polling timer
-        self._hotkey_cooldown = False
+        self._hotkey_thread = None
+        self._hotkey_thread_win_id = None
+        self._hotkey_signal.connect(self.cycle_and_activate_window)
         self.setup_ui()
         self.load_pinned_windows()
         self.check_window_validity()
-        # Register Win+O hotkey after the event loop is running and window is shown
-        if _WINDOWS_API_AVAILABLE:
-            QTimer.singleShot(1000, self._register_hotkey)
+        if platform.system() == "Windows":
+            QTimer.singleShot(1500, self._start_hotkey_thread)
         
     def setup_ui(self):
         """Build the main UI."""
@@ -336,15 +330,10 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
         
-        # Header row with + button on the right
-        header_row = QHBoxLayout()
-        header_row.setContentsMargins(0, 0, 0, 0)
-        header = QLabel("Pinned Windows")
-        header.setStyleSheet("font-size: 18px; font-weight: bold; color: #333;")
-        header_row.addWidget(header)
-        header_row.addStretch()
+        # Centered, wider green + button (no header label)
         add_btn = QPushButton("+")
-        add_btn.setFixedSize(36, 36)
+        add_btn.setFixedHeight(44)
+        add_btn.setFixedWidth(180)
         add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         add_btn.setToolTip("Add Window")
         add_btn.setStyleSheet("""
@@ -352,17 +341,20 @@ class MainWindow(QMainWindow):
                 background-color: #2E7D32;
                 color: white;
                 border: none;
-                border-radius: 18px;
-                font-size: 22px;
+                border-radius: 10px;
+                font-size: 26px;
                 font-weight: bold;
-                padding-bottom: 2px;
+                padding-bottom: 3px;
             }
             QPushButton:hover { background-color: #388E3C; }
             QPushButton:pressed { background-color: #1B5E20; }
         """)
         add_btn.clicked.connect(self.show_window_picker)
-        header_row.addWidget(add_btn)
-        layout.addLayout(header_row)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_row.addWidget(add_btn)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
         
         # Scroll area for pinned windows
         scroll = QScrollArea()
@@ -552,57 +544,78 @@ class MainWindow(QMainWindow):
             "<p>Version 0.1.0</p>"
         )
     
-    def _register_hotkey(self):
-        """Register Win+O as a global hotkey via RegisterHotKey."""
+    def _dbg(self, msg: str):
+        """Append a timestamped line to the debug log."""
+        import threading
+        from datetime import datetime
         try:
-            hwnd = int(self.winId())
-            try:
-                win32gui.UnregisterHotKey(hwnd, self._hotkey_id)
-            except Exception:
-                pass
-            # MOD_WIN=0x0008, VK_O=0x4F
-            success = win32gui.RegisterHotKey(hwnd, self._hotkey_id, 0x0008, 0x4F)
-            if not success:
-                # Fall back to polling if OS rejected the hotkey registration
-                self._start_hotkey_polling()
-        except Exception:
-            self._start_hotkey_polling()
-
-    def nativeEvent(self, eventType, message):
-        """Catch WM_HOTKEY messages from RegisterHotKey."""
-        if _WINDOWS_API_AVAILABLE and eventType == b"windows_generic_MSG":
-            try:
-                msg = _MSG.from_address(int(message))
-                if msg.message == 0x0312 and msg.wParam == self._hotkey_id:  # WM_HOTKEY
-                    self.cycle_and_activate_window()
-                    return True, 0
-            except Exception:
-                pass
-        return super().nativeEvent(eventType, message)
-
-    def _start_hotkey_polling(self):
-        """Fallback: poll Win+O via GetAsyncKeyState when RegisterHotKey fails."""
-        self._hotkey_timer = QTimer()
-        self._hotkey_timer.timeout.connect(self._check_hotkey)
-        self._hotkey_timer.start(50)
-
-    def _check_hotkey(self):
-        """Fallback hotkey check using held-key state (bit 15)."""
-        try:
-            win_held = bool(win32api.GetAsyncKeyState(0x5B) & 0x8000) or \
-                       bool(win32api.GetAsyncKeyState(0x5C) & 0x8000)
-            o_held = bool(win32api.GetAsyncKeyState(0x4F) & 0x8000)
-            if win_held and o_held and not self._hotkey_cooldown:
-                self._hotkey_cooldown = True
-                self.cycle_and_activate_window()
-            elif not (win_held and o_held):
-                self._hotkey_cooldown = False
+            with open(r"C:\Users\talki\tmp\cs_debug.txt", "a", encoding="utf-8") as f:
+                f.write(f"{datetime.now().strftime('%H:%M:%S.%f')} tid={threading.get_ident()} {msg}\n")
         except Exception:
             pass
 
+    def _start_hotkey_thread(self):
+        """Spawn a background thread that owns RegisterHotKey + GetMessageW loop."""
+        import threading
+        self._dbg("_start_hotkey_thread called")
+        self._hotkey_thread = threading.Thread(
+            target=self._hotkey_thread_func, daemon=True
+        )
+        self._hotkey_thread.start()
+
+    def _hotkey_thread_func(self):
+        """Background thread: registers Ctrl+Alt+O and blocks on GetMessageW."""
+        import ctypes
+        from ctypes import wintypes
+        kernel32 = ctypes.windll.kernel32
+        user32 = ctypes.windll.user32
+
+        self._hotkey_thread_win_id = kernel32.GetCurrentThreadId()
+        self._dbg(f"hotkey thread started, win_tid={self._hotkey_thread_win_id}")
+
+        MOD_CTRL_ALT = 0x0003
+        VK_O = 0x4F
+        HOTKEY_ID = 1
+        WM_HOTKEY = 0x0312
+        WM_QUIT = 0x0012
+
+        user32.UnregisterHotKey(None, HOTKEY_ID)
+        result = user32.RegisterHotKey(None, HOTKEY_ID, MOD_CTRL_ALT, VK_O)
+        last_err = ctypes.GetLastError()
+        self._dbg(f"RegisterHotKey result={result} GetLastError={last_err}")
+
+        if not result:
+            self._dbg("RegisterHotKey FAILED — hotkey thread exiting")
+            return
+
+        msg = wintypes.MSG()
+        self._dbg("entering GetMessageW loop")
+        while True:
+            ret = user32.GetMessageW(ctypes.byref(msg), None, 0, 0)
+            self._dbg(f"GetMessageW ret={ret} message={msg.message:#06x} wParam={msg.wParam}")
+            if ret == 0 or ret == -1:
+                break
+            if msg.message == WM_HOTKEY and msg.wParam == HOTKEY_ID:
+                self._dbg("HOTKEY FIRED — emitting signal")
+                self._hotkey_signal.emit()
+            if msg.message == WM_QUIT:
+                break
+
+        user32.UnregisterHotKey(None, HOTKEY_ID)
+        self._dbg("hotkey thread exiting")
+
     def cycle_and_activate_window(self):
         """Cycle to the next valid pinned window and activate it."""
+        self._dbg("cycle_and_activate_window called")
+        try:
+            import ctypes
+            user32 = ctypes.windll.user32
+        except Exception as e:
+            self._dbg(f"ctypes import failed: {e}")
+            return
+
         pinned = get_pinned_windows()
+        self._dbg(f"pinned count={len(pinned)}")
         if not pinned:
             return
 
@@ -612,38 +625,40 @@ class MainWindow(QMainWindow):
             next_index = (last_index + offset) % n
             window = pinned[next_index]
             hwnd = window.get("hwnd")
+            self._dbg(f"trying index={next_index} hwnd={hwnd} title={window.get('title','?')[:30]}")
             if not hwnd:
                 continue
             try:
-                if not win32gui.IsWindow(hwnd):
+                if not user32.IsWindow(hwnd):
+                    self._dbg(f"IsWindow=False, skipping")
                     continue
-                # Restore if minimized
-                if win32gui.IsIconic(hwnd):
-                    win32gui.ShowWindow(hwnd, win32con.SW_RESTORE)
-                # Bring to foreground
-                foreground_hwnd = win32gui.GetForegroundWindow()
-                tgt_thread = win32gui.GetWindowThreadProcessId(hwnd)[0]
-                if foreground_hwnd:
-                    fg_thread = win32gui.GetWindowThreadProcessId(foreground_hwnd)[0]
-                    win32gui.AttachThreadInput(fg_thread, tgt_thread, True)
-                win32gui.SetForegroundWindow(hwnd)
-                if foreground_hwnd:
-                    win32gui.AttachThreadInput(fg_thread, tgt_thread, False)
+                # Restore if minimised
+                if user32.IsIconic(hwnd):
+                    user32.ShowWindow(hwnd, 9)  # SW_RESTORE
+                # Allow this process to set foreground, then do it
+                user32.AllowSetForegroundWindow(0xFFFFFFFF)
+                user32.SetForegroundWindow(hwnd)
                 set_last_activated_index(next_index)
-                self.statusBar().showMessage(f"Switched to: {window.get('title', 'Unknown')[:40]}")
+                self._dbg(f"SetForegroundWindow done for hwnd={hwnd}")
+                self.statusBar().showMessage(
+                    f"Ctrl+Alt+O → {window.get('title', 'Unknown')[:40]}"
+                )
                 return
-            except Exception:
+            except Exception as e:
+                self._dbg(f"exception on hwnd={hwnd}: {e}")
                 continue
+        self._dbg("no valid window found to activate")
 
     def closeEvent(self, event):
         """Handle window close."""
-        if _WINDOWS_API_AVAILABLE:
-            try:
-                win32gui.UnregisterHotKey(int(self.winId()), self._hotkey_id)
-            except Exception:
-                pass
-        if self._hotkey_timer is not None:
-            self._hotkey_timer.stop()
+        try:
+            if self._hotkey_thread_win_id is not None:
+                import ctypes
+                ctypes.windll.user32.PostThreadMessageW(
+                    self._hotkey_thread_win_id, 0x0012, 0, 0  # WM_QUIT
+                )
+        except Exception:
+            pass
         event.accept()
 
 
