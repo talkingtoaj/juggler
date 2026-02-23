@@ -1,55 +1,68 @@
-# 🐙 Context Switcher
+# 🐙 Juggler
 
-A lightweight Windows utility that keeps a curated list of your open windows with personal notes, so you can switch between them instantly — without hunting through the taskbar.
+> Juggle your windows, not your attention.
 
----
+[![Latest Release](https://img.shields.io/github/v/release/talkingtoaj/context-switcher)](https://github.com/talkingtoaj/context-switcher/releases/latest)
+[![Windows](https://img.shields.io/badge/platform-Windows-blue)](https://github.com/talkingtoaj/context-switcher/releases/latest)
 
-## Features
-
-- **Pin any open window** with a colour-coded card
-- **Add a note** to each card ("debugging auth", "chapter 3", etc.)
-- **Click a card** to bring that window to the foreground
-- **Ctrl+Alt+O** to cycle to the next pinned window from anywhere — no need to open the app
-- Closed windows are automatically removed from the list
+Juggler is a tiny Windows utility that keeps a colour-coded shortlist of your open windows — with personal notes — so you can jump between them in one click or one keypress.
 
 ---
 
-## Installation (Windows)
+## Install
 
-### Option A — Automatic installer (recommended)
+**[⬇ Download Juggler.exe + install.ps1](https://github.com/talkingtoaj/context-switcher/releases/latest)**
 
-1. Download `ContextSwitcher.exe` and `install.ps1` from the [latest release](../../releases/latest)
-2. Put both files in the same folder
+1. Download both files from the link above
+2. Put them in the same folder
 3. Right-click `install.ps1` → **Run with PowerShell**
 
-The installer will:
-- Copy `ContextSwitcher.exe` to `%LOCALAPPDATA%\Programs\ContextSwitcher\`
-- Add it to **Windows startup** (runs when you log in)
-- Create a **Desktop shortcut**
+That's it. Juggler will appear on your Desktop and start automatically when you log in.
 
-### Option B — Manual
-
-1. Download `ContextSwitcher.exe` from the [latest release](../../releases/latest)
-2. Copy it anywhere you like (e.g. `C:\Users\<you>\Programs\ContextSwitcher\`)
-3. Double-click to run
-
-To add to startup manually: press `Win+R`, type `shell:startup`, and paste a shortcut to the exe there.
+> **No Python or dependencies needed** — it's a single standalone `.exe`.
 
 ---
 
-## Usage
+## How it works
 
-1. Launch Context Switcher
-2. Click the **+** button to add windows you want to track
-3. Type a note on any card to remind yourself what you're doing there
-4. Click a card to jump to that window, or press **Ctrl+Alt+O** from anywhere
+```
+1. Pin a window     →   click  +  and pick from your open apps
+2. Add a note       →   type a reminder on any card ("debugging auth", "ch.3 draft")
+3. Jump to it       →   click the card   or   press  Ctrl+Alt+O
+```
 
-### Keyboard shortcut
+**Ctrl+Alt+O** cycles through your pinned windows from anywhere — even when Juggler itself is in the background.
 
-| Shortcut | Action |
-|----------|--------|
-| `Ctrl+Alt+O` | Cycle to the next pinned window (works globally, app can be in background) |
-| `F5` | Refresh — removes any closed windows from the list |
+---
+
+## Screenshot
+
+```
+┌─────────────────────────────────────┐
+│  🐙 Juggler                [_][X]  │
+├─────────────────────────────────────┤
+│  ✕  █ story.py — VS Code            │
+│       "Chapter 3 draft"              │
+│                                      │
+│  ✕  █ Terminal — WSL                │
+│       "Running dev server"           │
+│                                      │
+│  ✕  █ Chrome — Stack Overflow       │
+│       "Research: window API"         │
+├─────────────────────────────────────┤
+│           [      +      ]            │
+│    Ctrl+Alt+O — cycle to next window │
+└─────────────────────────────────────┘
+```
+
+---
+
+## Keyboard shortcuts
+
+| Key | Action |
+|-----|--------|
+| `Ctrl+Alt+O` | Cycle to next pinned window (global) |
+| `F5` | Refresh — removes closed windows |
 | `Ctrl+Q` | Quit |
 
 ---
@@ -57,9 +70,12 @@ To add to startup manually: press `Win+R`, type `shell:startup`, and paste a sho
 ## Uninstall
 
 Run `install.ps1` again and choose **Uninstall**, or manually:
-1. Delete `%LOCALAPPDATA%\Programs\ContextSwitcher\`
+
+1. Delete `%LOCALAPPDATA%\Programs\Juggler\`
 2. Delete the Desktop shortcut
-3. Open Task Manager → Startup apps → disable Context Switcher
+3. Press `Win+R` → type `shell:startup` → delete any Juggler shortcut there
+
+Your saved data (`%USERPROFILE%\.juggler\data.json`) is not touched.
 
 ---
 
@@ -79,11 +95,5 @@ To build a standalone `.exe`:
 uv run --with pyinstaller --with pywin32 --with PyQt6 --with pillow pyinstaller `
     --onefile --noconsole --icon=icon2.ico `
     --add-data "icon.png;." --add-data "icon2.png;." --add-data "icon2.ico;." `
-    --name ContextSwitcher main.py
+    --name Juggler main.py
 ```
-
----
-
-## Data
-
-Settings and pinned windows are saved to `%USERPROFILE%\.context-switcher\data.json`.

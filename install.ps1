@@ -1,12 +1,12 @@
-# Context Switcher — Installer / Uninstaller
+# Juggler — Installer / Uninstaller
 # Run with: Right-click -> Run with PowerShell
 
-$AppName    = "ContextSwitcher"
-$ExeName    = "ContextSwitcher.exe"
-$InstallDir = "$env:LOCALAPPDATA\Programs\$AppName"
-$StartupKey = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
-$ShortcutPath = "$env:USERPROFILE\Desktop\Context Switcher.lnk"
-$SourceExe  = Join-Path $PSScriptRoot $ExeName
+$AppName      = "Juggler"
+$ExeName      = "Juggler.exe"
+$InstallDir   = "$env:LOCALAPPDATA\Programs\$AppName"
+$StartupKey   = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
+$ShortcutPath = "$env:USERPROFILE\Desktop\Juggler.lnk"
+$SourceExe    = Join-Path $PSScriptRoot $ExeName
 
 function Install {
     # Check exe is present
@@ -17,7 +17,7 @@ function Install {
         exit 1
     }
 
-    Write-Host "Installing Context Switcher..." -ForegroundColor Cyan
+    Write-Host "Installing Juggler..." -ForegroundColor Cyan
 
     # Copy exe
     New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
@@ -31,15 +31,15 @@ function Install {
     # Create desktop shortcut
     $Shell    = New-Object -ComObject WScript.Shell
     $Shortcut = $Shell.CreateShortcut($ShortcutPath)
-    $Shortcut.TargetPath  = "$InstallDir\$ExeName"
+    $Shortcut.TargetPath   = "$InstallDir\$ExeName"
     $Shortcut.IconLocation = "$InstallDir\$ExeName"
-    $Shortcut.Description = "Context Switcher — window manager with notes"
+    $Shortcut.Description  = "Juggler — juggle your windows, not your attention"
     $Shortcut.Save()
     Write-Host "  Desktop shortcut created" -ForegroundColor Green
 
     Write-Host ""
-    Write-Host "Done! Context Switcher will start automatically when you log in." -ForegroundColor Green
-    Write-Host "Shortcut: Ctrl+Alt+O cycles through your pinned windows from anywhere."
+    Write-Host "Done! Juggler will start automatically when you log in." -ForegroundColor Green
+    Write-Host "Tip: press Ctrl+Alt+O from anywhere to cycle through your pinned windows."
     Write-Host ""
     $launch = Read-Host "Launch now? (y/n)"
     if ($launch -eq "y") {
@@ -48,7 +48,7 @@ function Install {
 }
 
 function Uninstall {
-    Write-Host "Uninstalling Context Switcher..." -ForegroundColor Cyan
+    Write-Host "Uninstalling Juggler..." -ForegroundColor Cyan
 
     # Stop if running
     Stop-Process -Name $AppName -Force -ErrorAction SilentlyContinue
@@ -66,13 +66,13 @@ function Uninstall {
     Write-Host "  Removed $InstallDir" -ForegroundColor Green
 
     Write-Host ""
-    Write-Host "Context Switcher has been uninstalled." -ForegroundColor Green
-    Write-Host "(Your saved windows data in %USERPROFILE%\.context-switcher\ was not deleted.)"
+    Write-Host "Juggler has been uninstalled." -ForegroundColor Green
+    Write-Host "(Your saved data in %USERPROFILE%\.juggler\ was not deleted.)"
 }
 
 # --- Main ---
 Write-Host ""
-Write-Host "  🐙 Context Switcher Setup" -ForegroundColor Cyan
+Write-Host "  Juggler Setup" -ForegroundColor Cyan
 Write-Host ""
 
 if (Test-Path "$InstallDir\$ExeName") {

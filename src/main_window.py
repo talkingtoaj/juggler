@@ -1,5 +1,5 @@
 """
-Main Window - PyQt6 UI for Context Switcher
+Main Window - PyQt6 UI for Juggler
 """
 
 import sys
@@ -260,13 +260,13 @@ class WindowPickerDialog(QDialog):
         pinned_hwids = set(w.get("hwnd") for w in pinned)
         
         # Get our own window title to filter out
-        our_title = "Context Switcher"
+        our_title = "Juggler"
         
         # Filter out already-pinned windows and our own app
         filtered = [
             w for w in windows 
             if w["hwnd"] not in pinned_hwids 
-            and "context switcher" not in w["title"].lower()
+            and "juggler" not in w["title"].lower()
             and w["title"].strip()  # Skip empty titles
         ]
         
@@ -312,7 +312,7 @@ class MainWindow(QMainWindow):
         
     def setup_ui(self):
         """Build the main UI."""
-        self.setWindowTitle("🐙 Context Switcher")
+        self.setWindowTitle("🐙 Juggler")
         self.setMinimumSize(400, 300)
         self.resize(450, 500)
         
@@ -537,8 +537,8 @@ class MainWindow(QMainWindow):
         """Show about dialog."""
         QMessageBox.about(
             self,
-            "About Context Switcher",
-            "<h3>🐙 Context Switcher</h3>"
+            "About Juggler",
+            "<h3>🐙 Juggler</h3>"
             "<p>A simple tool to help you manage multiple windows "
             "with context notes.</p>"
             "<p>Version 0.1.0</p>"

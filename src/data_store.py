@@ -1,5 +1,5 @@
 """
-Data Store - JSON Persistence for Context Switcher
+Data Store - JSON Persistence for Juggler
 """
 
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 
 # Default data directory
-DATA_DIR = Path.home() / ".context-switcher"
+DATA_DIR = Path.home() / ".juggler"
 DATA_FILE = DATA_DIR / "data.json"
 
 
