@@ -301,6 +301,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._hotkey_timer = None
         self._hotkey_cooldown = False
+        self._use_peek_msg = False
         self.setup_ui()
         self.load_pinned_windows()
         self.check_window_validity()
@@ -327,15 +328,10 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
         
-        # Header row with compact green + button
-        header_row = QHBoxLayout()
-        header_row.setContentsMargins(0, 0, 0, 0)
-        header = QLabel("Pinned Windows")
-        header.setStyleSheet("font-size: 18px; font-weight: bold; color: #333;")
-        header_row.addWidget(header)
-        header_row.addStretch()
+        # Centered, wider green + button (no header label)
         add_btn = QPushButton("+")
-        add_btn.setFixedSize(36, 36)
+        add_btn.setFixedHeight(44)
+        add_btn.setFixedWidth(180)
         add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         add_btn.setToolTip("Add Window")
         add_btn.setStyleSheet("""
@@ -343,17 +339,20 @@ class MainWindow(QMainWindow):
                 background-color: #2E7D32;
                 color: white;
                 border: none;
-                border-radius: 18px;
-                font-size: 22px;
+                border-radius: 10px;
+                font-size: 26px;
                 font-weight: bold;
-                padding-bottom: 2px;
+                padding-bottom: 3px;
             }
             QPushButton:hover { background-color: #388E3C; }
             QPushButton:pressed { background-color: #1B5E20; }
         """)
         add_btn.clicked.connect(self.show_window_picker)
-        header_row.addWidget(add_btn)
-        layout.addLayout(header_row)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch()
+        btn_row.addWidget(add_btn)
+        btn_row.addStretch()
+        layout.addLayout(btn_row)
         
         # Scroll area for pinned windows
         scroll = QScrollArea()
@@ -544,26 +543,54 @@ class MainWindow(QMainWindow):
         )
     
     def _start_hotkey_polling(self):
-        """Start polling for Win+O using GetAsyncKeyState. No ctypes, no nativeEvent."""
-        if not _load_win32():
-            return
+        """Register Win+O globally via RegisterHotKey and poll with PeekMessageW."""
+        try:
+            import ctypes
+            from ctypes import wintypes
+            user32 = ctypes.windll.user32
+            MOD_WIN = 0x0008
+            VK_O = 0x4F
+            HOTKEY_ID = 1
+            # Unregister any leftover from a previous run
+            user32.UnregisterHotKey(None, HOTKEY_ID)
+            if user32.RegisterHotKey(None, HOTKEY_ID, MOD_WIN, VK_O):
+                self._use_peek_msg = True
+                self._user32 = user32
+                self._ctypes = ctypes
+                self._MSG_type = wintypes.MSG
+                self._WM_HOTKEY = 0x0312
+                self._HOTKEY_ID = HOTKEY_ID
+        except Exception:
+            self._use_peek_msg = False
+
         self._hotkey_timer = QTimer()
         self._hotkey_timer.timeout.connect(self._check_hotkey)
         self._hotkey_timer.start(50)
 
     def _check_hotkey(self):
-        """Check if Win+O is currently held; fire once per press with cooldown."""
+        """Check for Win+O hotkey. Uses PeekMessageW if RegisterHotKey succeeded."""
         try:
-            win_held = (bool(_win32api.GetAsyncKeyState(0x5B) & 0x8000) or
-                        bool(_win32api.GetAsyncKeyState(0x5C) & 0x8000))
-            o_held   = bool(_win32api.GetAsyncKeyState(0x4F) & 0x8000)
-
-            if win_held and o_held:
-                if not self._hotkey_cooldown:
-                    self._hotkey_cooldown = True
-                    self.cycle_and_activate_window()
+            if self._use_peek_msg:
+                msg = self._MSG_type()
+                if self._user32.PeekMessageW(
+                    self._ctypes.byref(msg), None,
+                    self._WM_HOTKEY, self._WM_HOTKEY, 1
+                ):
+                    if msg.message == self._WM_HOTKEY and msg.wParam == self._HOTKEY_ID:
+                        self.cycle_and_activate_window()
             else:
-                self._hotkey_cooldown = False
+                # Fallback: GetAsyncKeyState polling
+                if not _load_win32():
+                    return
+                win_held = (bool(_win32api.GetAsyncKeyState(0x5B) & 0x8000) or
+                            bool(_win32api.GetAsyncKeyState(0x5C) & 0x8000))
+                o_held = bool(_win32api.GetAsyncKeyState(0x4F) & 0x8000)
+                if win_held and o_held:
+                    if not self._hotkey_cooldown:
+                        self._hotkey_cooldown = True
+                        self.cycle_and_activate_window()
+                else:
+                    self._hotkey_cooldown = False
         except Exception:
             pass
 
@@ -607,6 +634,11 @@ class MainWindow(QMainWindow):
         """Handle window close."""
         if self._hotkey_timer is not None:
             self._hotkey_timer.stop()
+        try:
+            if self._use_peek_msg and hasattr(self, '_user32'):
+                self._user32.UnregisterHotKey(None, self._HOTKEY_ID)
+        except Exception:
+            pass
         event.accept()
 
 
