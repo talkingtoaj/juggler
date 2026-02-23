@@ -112,3 +112,16 @@ def save_settings(settings: Dict[str, Any]) -> bool:
     data = load_data()
     data["settings"] = settings
     return save_data(data)
+
+
+def get_last_activated_index() -> int:
+    """Return the index of the last Win+O activated window (-1 if none)."""
+    data = load_data()
+    return data.get("settings", {}).get("last_activated_index", -1)
+
+
+def set_last_activated_index(index: int) -> bool:
+    """Persist the last Win+O activated window index."""
+    data = load_data()
+    data.setdefault("settings", {})["last_activated_index"] = index
+    return save_data(data)

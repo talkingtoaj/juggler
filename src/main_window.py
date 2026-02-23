@@ -7,6 +7,24 @@ import platform
 from datetime import datetime
 from typing import Optional
 
+# Windows API — imported lazily inside methods to avoid crash-at-import in frozen exe
+_win32api = None
+_win32gui = None
+_win32con = None
+
+def _load_win32():
+    global _win32api, _win32gui, _win32con
+    if _win32api is not None:
+        return True
+    try:
+        import win32api, win32gui, win32con
+        _win32api = win32api
+        _win32gui = win32gui
+        _win32con = win32con
+        return True
+    except Exception:
+        return False
+
 # PyQt6 imports
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
@@ -20,9 +38,10 @@ from PyQt6.QtGui import QAction, QIcon, QColor, QPalette, QBrush
 # Our imports
 from .window_manager import WindowManager, filter_system_windows
 from .data_store import (
-    get_pinned_windows, save_pinned_windows, 
+    get_pinned_windows, save_pinned_windows,
     add_pinned_window, remove_pinned_window, update_pinned_window,
-    get_settings, save_settings
+    get_settings, save_settings,
+    get_last_activated_index, set_last_activated_index
 )
 
 
@@ -280,9 +299,13 @@ class MainWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
+        self._hotkey_timer = None
+        self._hotkey_cooldown = False
         self.setup_ui()
         self.load_pinned_windows()
         self.check_window_validity()
+        if platform.system() == "Windows":
+            QTimer.singleShot(1500, self._start_hotkey_polling)
         
     def setup_ui(self):
         """Build the main UI."""
@@ -520,8 +543,70 @@ class MainWindow(QMainWindow):
             "<p>Version 0.1.0</p>"
         )
     
+    def _start_hotkey_polling(self):
+        """Start polling for Win+O using GetAsyncKeyState. No ctypes, no nativeEvent."""
+        if not _load_win32():
+            return
+        self._hotkey_timer = QTimer()
+        self._hotkey_timer.timeout.connect(self._check_hotkey)
+        self._hotkey_timer.start(50)
+
+    def _check_hotkey(self):
+        """Check if Win+O is currently held; fire once per press with cooldown."""
+        try:
+            win_held = (bool(_win32api.GetAsyncKeyState(0x5B) & 0x8000) or
+                        bool(_win32api.GetAsyncKeyState(0x5C) & 0x8000))
+            o_held   = bool(_win32api.GetAsyncKeyState(0x4F) & 0x8000)
+
+            if win_held and o_held:
+                if not self._hotkey_cooldown:
+                    self._hotkey_cooldown = True
+                    self.cycle_and_activate_window()
+            else:
+                self._hotkey_cooldown = False
+        except Exception:
+            pass
+
+    def cycle_and_activate_window(self):
+        """Cycle to the next valid pinned window and activate it."""
+        if not _load_win32():
+            return
+        pinned = get_pinned_windows()
+        if not pinned:
+            return
+        last_index = get_last_activated_index()
+        n = len(pinned)
+        for offset in range(1, n + 1):
+            next_index = (last_index + offset) % n
+            window = pinned[next_index]
+            hwnd = window.get("hwnd")
+            if not hwnd:
+                continue
+            try:
+                if not _win32gui.IsWindow(hwnd):
+                    continue
+                if _win32gui.IsIconic(hwnd):
+                    _win32gui.ShowWindow(hwnd, _win32con.SW_RESTORE)
+                fg_hwnd = _win32gui.GetForegroundWindow()
+                tgt_tid = _win32gui.GetWindowThreadProcessId(hwnd)[0]
+                if fg_hwnd:
+                    fg_tid = _win32gui.GetWindowThreadProcessId(fg_hwnd)[0]
+                    _win32gui.AttachThreadInput(fg_tid, tgt_tid, True)
+                _win32gui.SetForegroundWindow(hwnd)
+                if fg_hwnd:
+                    _win32gui.AttachThreadInput(fg_tid, tgt_tid, False)
+                set_last_activated_index(next_index)
+                self.statusBar().showMessage(
+                    f"Win+O → {window.get('title', 'Unknown')[:40]}"
+                )
+                return
+            except Exception:
+                continue
+
     def closeEvent(self, event):
         """Handle window close."""
+        if self._hotkey_timer is not None:
+            self._hotkey_timer.stop()
         event.accept()
 
 
