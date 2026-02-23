@@ -87,85 +87,69 @@ class PinnedWindowItem(QFrame):
     def setup_ui(self):
         """Build the UI for this item."""
         self.setFrameStyle(QFrame.Shape.StyledPanel | QFrame.Shadow.Raised)
-        
-        # Get the color for background
+
         bg_color = self.window_data.get("color", COLORS[0])
-        
-        # Set background color
-        self.setStyleSheet(f"background-color: {bg_color}; border-radius: 8px;")
-        
-        # Main layout - color bar + content + delete button
+        self.setStyleSheet(f"QFrame {{ background-color: {bg_color}; border-radius: 8px; }}")
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
-        
-        # Color indicator bar on the left (clickable to activate)
-        self.color_bar = QFrame()
-        self.color_bar.setFixedWidth(12)
-        self.color_bar.setStyleSheet(f"background-color: {bg_color}; border-radius: 8px 0 0 8px;")
-        self.color_bar.setCursor(Qt.CursorShape.PointingHandCursor)
-        # Override mouse press to activate
-        self.color_bar.mousePressEvent = self._handle_click
-        layout.addWidget(self.color_bar)
-        
-        # Window info (title clickable to activate, note is for editing)
-        info_widget = QWidget()
-        info_layout = QVBoxLayout(info_widget)
-        info_layout.setContentsMargins(12, 10, 8, 10)
-        info_layout.setSpacing(4)
-        
-        # Title (clickable to activate)
-        title = self.window_data.get("title", "Unknown")
-        if len(title) > 50:
-            title = title[:47] + "..."
-        self.title_label = QLabel(title)
-        self.title_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #000000;")
-        self.title_label.setCursor(Qt.CursorShape.PointingHandCursor)
-        self.title_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        # Click on title activates window
-        self.title_label.mousePressEvent = self._handle_click
-        info_layout.addWidget(self.title_label)
-        
-        # Note (editable - clicking does NOT activate, just lets you type)
-        self.note_edit = QLineEdit()
-        self.note_edit.setPlaceholderText("Add a note...")
-        self.note_edit.setText(self.window_data.get("note", ""))
-        self.note_edit.setStyleSheet("""
-            background: transparent; 
-            border: none; 
-            color: #1a237e;
-            font-size: 12px;
-        """)
-        # Auto-save note when text changes
-        self.note_edit.textChanged.connect(lambda text: self.note_edited.emit(self.hwnd, text))
-        # Note: clicking on note field does NOT trigger activation - that's the default behavior
-        info_layout.addWidget(self.note_edit)
-        
-        layout.addWidget(info_widget, 4)  # Takes ~80% of space
-        
-        # Delete button (fixed width ~20%, right justified)
+
+        # Delete button on the left — always visible
         self.delete_btn = QPushButton("✕")
-        self.delete_btn.setFixedWidth(80)
+        self.delete_btn.setFixedWidth(34)
         self.delete_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         self.delete_btn.setStyleSheet("""
-            QPushButton { 
-                border: none; 
-                background-color: rgba(255,255,255,150);
+            QPushButton {
+                border: none;
+                background: transparent;
                 color: #c62828;
-                font-size: 18px;
+                font-size: 13px;
                 font-weight: bold;
-                border-radius: 0 8px 8px 0;
-                margin: 8px 0;
+                border-radius: 8px 0 0 8px;
             }
-            QPushButton:hover { 
+            QPushButton:hover {
                 background-color: #FF6B6B;
                 color: white;
             }
         """)
         self.delete_btn.clicked.connect(lambda: self.deleted.emit(self.hwnd))
-        layout.addWidget(self.delete_btn)  # Fixed width, right side
-        
-        # Make the whole item clickable
+        layout.addWidget(self.delete_btn)
+
+        # Window info: title + note
+        info_widget = QWidget()
+        info_widget.setStyleSheet("background: transparent;")
+        info_layout = QVBoxLayout(info_widget)
+        info_layout.setContentsMargins(4, 10, 12, 10)
+        info_layout.setSpacing(4)
+
+        title = self.window_data.get("title", "Unknown")
+        if len(title) > 50:
+            title = title[:47] + "..."
+        self.title_label = QLabel(title)
+        self.title_label.setStyleSheet(
+            "font-weight: bold; font-size: 13px; color: #000000; background: transparent;"
+        )
+        self.title_label.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.title_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        self.title_label.mousePressEvent = self._handle_click
+        info_layout.addWidget(self.title_label)
+
+        self.note_edit = QLineEdit()
+        self.note_edit.setPlaceholderText("Add a note...")
+        self.note_edit.setText(self.window_data.get("note", ""))
+        self.note_edit.setStyleSheet("""
+            QLineEdit {
+                background: transparent;
+                border: none;
+                color: #1a237e;
+                font-size: 12px;
+            }
+        """)
+        self.note_edit.textChanged.connect(lambda text: self.note_edited.emit(self.hwnd, text))
+        info_layout.addWidget(self.note_edit)
+
+        layout.addWidget(info_widget)
         self.setCursor(Qt.CursorShape.PointingHandCursor)
     
     def _handle_click(self, event):
@@ -181,12 +165,17 @@ class PinnedWindowItem(QFrame):
     
     def update_valid_state(self, is_valid: bool):
         """Update visual state based on window validity."""
+        bg_color = self.window_data.get("color", COLORS[0])
         if is_valid:
-            self.setStyleSheet("background-color: #fff;")
-            self.title_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #000;")
+            self.setStyleSheet(f"QFrame {{ background-color: {bg_color}; border-radius: 8px; }}")
+            self.title_label.setStyleSheet(
+                "font-weight: bold; font-size: 13px; color: #000000; background: transparent;"
+            )
         else:
-            self.setStyleSheet("background-color: #ffebee;")
-            self.title_label.setStyleSheet("font-weight: bold; font-size: 13px; color: #999; text-decoration: line-through;")
+            self.setStyleSheet("QFrame { background-color: #ffebee; border-radius: 8px; }")
+            self.title_label.setStyleSheet(
+                "font-weight: bold; font-size: 13px; color: #999; text-decoration: line-through; background: transparent;"
+            )
 
 
 class WindowPickerDialog(QDialog):
@@ -315,27 +304,33 @@ class MainWindow(QMainWindow):
         layout.setContentsMargins(12, 12, 12, 12)
         layout.setSpacing(8)
         
-        # Header
+        # Header row with compact green + button
+        header_row = QHBoxLayout()
+        header_row.setContentsMargins(0, 0, 0, 0)
         header = QLabel("Pinned Windows")
         header.setStyleSheet("font-size: 18px; font-weight: bold; color: #333;")
-        layout.addWidget(header)
-        
-        # Add button
-        add_btn = QPushButton("+ Add Window")
+        header_row.addWidget(header)
+        header_row.addStretch()
+        add_btn = QPushButton("+")
+        add_btn.setFixedSize(36, 36)
         add_btn.setCursor(Qt.CursorShape.PointingHandCursor)
-        add_btn.setStyleSheet(
-            "QPushButton {"
-            "  background-color: #4ECDC4;"
-            "  color: white;"
-            "  border: none;"
-            "  padding: 10px;"
-            "  border-radius: 6px;"
-            "  font-size: 14px;"
-            "}"
-            "QPushButton:hover { background-color: #3DBDB5; }"
-        )
+        add_btn.setToolTip("Add Window")
+        add_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #2E7D32;
+                color: white;
+                border: none;
+                border-radius: 18px;
+                font-size: 22px;
+                font-weight: bold;
+                padding-bottom: 2px;
+            }
+            QPushButton:hover { background-color: #388E3C; }
+            QPushButton:pressed { background-color: #1B5E20; }
+        """)
         add_btn.clicked.connect(self.show_window_picker)
-        layout.addWidget(add_btn)
+        header_row.addWidget(add_btn)
+        layout.addLayout(header_row)
         
         # Scroll area for pinned windows
         scroll = QScrollArea()
