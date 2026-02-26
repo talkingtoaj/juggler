@@ -285,7 +285,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self._hotkey_thread = None
         self._hotkey_thread_win_id = None
-        self._win_event_proc = None   # keep ctypes callback alive
+        self._fg_tracker_thread = None
         self._last_other_hwnd = None  # hwnd of last non-Juggler foreground window
         self._last_other_title = ""
         self._our_hwnd = 0
@@ -561,7 +561,7 @@ class MainWindow(QMainWindow):
             pass
 
     def _start_hotkey_thread(self):
-        """Spawn background thread for hotkey + foreground tracking."""
+        """Spawn background threads for hotkey and foreground tracking."""
         import threading
         self._dbg("_start_hotkey_thread called")
         try:
@@ -572,9 +572,37 @@ class MainWindow(QMainWindow):
             target=self._hotkey_thread_func, daemon=True
         )
         self._hotkey_thread.start()
+        self._fg_tracker_thread = threading.Thread(
+            target=self._fg_tracker_thread_func, daemon=True
+        )
+        self._fg_tracker_thread.start()
+
+    def _fg_tracker_thread_func(self):
+        """Poll GetForegroundWindow every 250ms and track last non-Juggler window."""
+        import ctypes
+        import time
+        user32 = ctypes.windll.user32
+        last_seen_hwnd = None
+        while True:
+            time.sleep(0.25)
+            try:
+                hwnd = user32.GetForegroundWindow()
+                if not hwnd or hwnd == last_seen_hwnd:
+                    continue
+                last_seen_hwnd = hwnd
+                buf = ctypes.create_unicode_buffer(256)
+                user32.GetWindowTextW(hwnd, buf, 256)
+                title = buf.value
+                if not title or 'juggler' in title.lower():
+                    continue
+                self._last_other_hwnd = hwnd
+                self._last_other_title = title
+                self._update_prev_button_signal.emit(title[:40])
+            except Exception:
+                pass
 
     def _hotkey_thread_func(self):
-        """Background thread: registers Ctrl+Alt+O, tracks foreground window changes."""
+        """Background thread: registers Ctrl+Alt+O and blocks on GetMessageW."""
         import ctypes
         from ctypes import wintypes
         kernel32 = ctypes.windll.kernel32
@@ -598,45 +626,6 @@ class MainWindow(QMainWindow):
             self._dbg("RegisterHotKey FAILED — hotkey thread exiting")
             return
 
-        # Track foreground window changes via WinEventHook
-        EVENT_SYSTEM_FOREGROUND = 0x0003
-        WINEVENT_OUTOFCONTEXT = 0x0000
-
-        WinEventProcType = ctypes.WINFUNCTYPE(
-            None,
-            wintypes.HANDLE,  # hWinEventHook
-            wintypes.DWORD,   # event
-            wintypes.HWND,    # hwnd
-            wintypes.LONG,    # idObject
-            wintypes.LONG,    # idChild
-            wintypes.DWORD,   # idEventThread
-            wintypes.DWORD,   # dwmsEventTime
-        )
-
-        def _on_foreground_change(hHook, event, hwnd, idObject, idChild, idThread, dwTime):
-            try:
-                if not hwnd:
-                    return
-                buf = ctypes.create_unicode_buffer(256)
-                user32.GetWindowTextW(hwnd, buf, 256)
-                title = buf.value
-                if not title or 'juggler' in title.lower():
-                    return
-                self._last_other_hwnd = hwnd
-                self._last_other_title = title
-                self._update_prev_button_signal.emit(title[:40])
-            except Exception:
-                pass
-
-        proc = WinEventProcType(_on_foreground_change)
-        self._win_event_proc = proc  # prevent garbage collection
-
-        hook = user32.SetWinEventHook(
-            EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND,
-            None, proc, 0, 0, WINEVENT_OUTOFCONTEXT
-        )
-        self._dbg(f"SetWinEventHook {'ok' if hook else 'FAILED'} hook={hook}")
-
         msg = wintypes.MSG()
         self._dbg("entering GetMessageW loop")
         while True:
@@ -650,8 +639,6 @@ class MainWindow(QMainWindow):
             if msg.message == WM_QUIT:
                 break
 
-        if hook:
-            user32.UnhookWinEvent(hook)
         user32.UnregisterHotKey(None, HOTKEY_ID)
         self._dbg("hotkey thread exiting")
 
