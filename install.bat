@@ -5,7 +5,7 @@ REM Double-click to run. Downloads Juggler.exe automatically if not present.
 set APP=Juggler
 set EXE=Juggler.exe
 set INSTALL_DIR=%LOCALAPPDATA%\Programs\Juggler
-set SHORTCUT=%USERPROFILE%\Desktop\Juggler.lnk
+REM SHORTCUT resolved at runtime via PowerShell to handle OneDrive Desktop redirection
 set STARTUP_KEY=HKCU\Software\Microsoft\Windows\CurrentVersion\Run
 set DOWNLOAD_URL=https://github.com/talkingtoaj/juggler/releases/latest/download/Juggler.exe
 
@@ -62,14 +62,19 @@ REM --- Add to startup ---
 reg add "%STARTUP_KEY%" /v "%APP%" /t REG_SZ /d "\"%INSTALL_DIR%\%EXE%\"" /f >nul
 echo   Added to Windows startup
 
-REM --- Create desktop shortcut (requires WScript, available on all Windows) ---
+REM --- Create desktop shortcut (resolve Desktop via shell to handle OneDrive redirection) ---
 powershell -NoProfile -ExecutionPolicy Bypass -Command ^
-  "$s = (New-Object -ComObject WScript.Shell).CreateShortcut('%SHORTCUT%');" ^
+  "$desk = [Environment]::GetFolderPath('Desktop');" ^
+  "$s = (New-Object -ComObject WScript.Shell).CreateShortcut(\"$desk\Juggler.lnk\");" ^
   "$s.TargetPath = '%INSTALL_DIR%\%EXE%';" ^
   "$s.IconLocation = '%INSTALL_DIR%\%EXE%';" ^
   "$s.Description = 'Juggler - juggle your windows, not your attention';" ^
   "$s.Save()"
-echo   Desktop shortcut created
+if errorlevel 1 (
+    echo   WARNING: Desktop shortcut could not be created.
+) else (
+    echo   Desktop shortcut created
+)
 
 echo.
 echo   Done! Juggler will start automatically when you log in.
@@ -84,7 +89,10 @@ echo   Uninstalling %APP%...
 taskkill /IM "%EXE%" /F >nul 2>&1
 reg delete "%STARTUP_KEY%" /v "%APP%" /f >nul 2>&1
 echo   Removed from startup
-if exist "%SHORTCUT%" del /f "%SHORTCUT%"
+powershell -NoProfile -ExecutionPolicy Bypass -Command ^
+  "$desk = [Environment]::GetFolderPath('Desktop');" ^
+  "$lnk = \"$desk\Juggler.lnk\";" ^
+  "if (Test-Path $lnk) { Remove-Item $lnk -Force }"
 echo   Desktop shortcut removed
 if exist "%INSTALL_DIR%" rmdir /s /q "%INSTALL_DIR%"
 echo   Removed %INSTALL_DIR%
