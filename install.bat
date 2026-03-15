@@ -1,4 +1,5 @@
 @echo off
+setlocal enabledelayedexpansion
 REM Juggler - Installer / Uninstaller
 REM Double-click to run. Downloads Juggler.exe automatically if not present.
 
@@ -22,8 +23,8 @@ if exist "%INSTALL_DIR%\%EXE%" (
     echo   [3] Cancel
     echo.
     set /p CHOICE="  Choose (1/2/3): "
-    if "%CHOICE%"=="1" goto :install
-    if "%CHOICE%"=="2" goto :uninstall
+    if "!CHOICE!"=="1" goto :install
+    if "!CHOICE!"=="2" goto :uninstall
     goto :cancel
 ) else (
     goto :install
