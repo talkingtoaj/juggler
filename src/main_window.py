@@ -534,16 +534,26 @@ class MainWindow(QMainWindow):
         update_pinned_window(hwnd, {"note": note})
 
     def check_window_validity(self):
-        """Auto-remove any pinned windows whose handles are no longer valid."""
+        """Remove closed and duplicate pinned windows."""
         if not WindowManager.is_available():
             return
 
+        # Collect invalid (closed) hwnds from the UI
         to_remove = []
         for i in range(self.pinned_layout.count() - 1):  # Skip stretch
             item = self.pinned_layout.itemAt(i).widget()
             if isinstance(item, PinnedWindowItem):
                 if not WindowManager.is_window_valid(item.hwnd):
                     to_remove.append(item.hwnd)
+
+        # Collect duplicate hwnds from stored data (keep first occurrence)
+        seen = set()
+        for w in get_pinned_windows():
+            hwnd = w.get("hwnd")
+            if hwnd in seen:
+                to_remove.append(hwnd)
+            else:
+                seen.add(hwnd)
 
         if to_remove:
             for hwnd in to_remove:

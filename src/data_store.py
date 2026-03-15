@@ -76,8 +76,11 @@ def save_pinned_windows(windows: List[Dict[str, Any]]) -> bool:
 
 
 def add_pinned_window(window: Dict[str, Any]) -> bool:
-    """Add a pinned window."""
+    """Add a pinned window. Returns False (without saving) if hwnd already exists."""
     data = load_data()
+    hwnd = window.get("hwnd")
+    if any(w.get("hwnd") == hwnd for w in data["pinned_windows"]):
+        return False
     data["pinned_windows"].append(window)
     return save_data(data)
 
