@@ -2,8 +2,8 @@
 
 > Juggle your windows, not your attention.
 
-[![Latest Release](https://img.shields.io/github/v/release/talkingtoaj/context-switcher)](https://github.com/talkingtoaj/context-switcher/releases/latest)
-[![Windows](https://img.shields.io/badge/platform-Windows-blue)](https://github.com/talkingtoaj/context-switcher/releases/latest)
+[![Latest Release](https://img.shields.io/github/v/release/talkingtoaj/juggler)](https://github.com/talkingtoaj/juggler/releases/latest)
+[![Windows](https://img.shields.io/badge/platform-Windows-blue)](https://github.com/talkingtoaj/juggler/releases/latest)
 
 Juggler is a tiny Windows utility that keeps a colour-coded shortlist of your open windows — with personal notes — so you can jump between them in one click or one keypress.
 
@@ -11,13 +11,12 @@ Juggler is a tiny Windows utility that keeps a colour-coded shortlist of your op
 
 ## Install
 
-**[⬇ Download Juggler.exe + install.ps1](https://github.com/talkingtoaj/context-switcher/releases/latest)**
+**[⬇ Download install.bat](https://github.com/talkingtoaj/juggler/releases/latest/download/install.bat)**
 
-1. Download both files from the link above
-2. Put them in the same folder
-3. Right-click `install.ps1` → **Run with PowerShell**
+1. Download `install.bat` from the link above
+2. Double-click it
 
-That's it. Juggler will appear on your Desktop and start automatically when you log in.
+That's it. The installer downloads `Juggler.exe` automatically, adds it to startup, and puts a shortcut on your Desktop.
 
 > **No Python or dependencies needed** — it's a single standalone `.exe`.
 
@@ -69,7 +68,7 @@ That's it. Juggler will appear on your Desktop and start automatically when you 
 
 ## Uninstall
 
-Run `install.ps1` again and choose **Uninstall**, or manually:
+Run `install.bat` again and choose **Uninstall**, or manually:
 
 1. Delete `%LOCALAPPDATA%\Programs\Juggler\`
 2. Delete the Desktop shortcut
@@ -84,16 +83,17 @@ Your saved data (`%USERPROFILE%\.juggler\data.json`) is not touched.
 Requirements: Windows, [uv](https://github.com/astral-sh/uv), Python 3.11+
 
 ```powershell
-git clone https://github.com/talkingtoaj/context-switcher.git
-cd context-switcher
+git clone https://github.com/talkingtoaj/juggler.git
+cd juggler
 uv run python main.py
 ```
 
 To build a standalone `.exe`:
 
 ```powershell
+python make_ico.py   # generate icon.ico from icon.png
 uv run --with pyinstaller --with pywin32 --with PyQt6 --with pillow pyinstaller `
-    --onefile --noconsole --icon=icon2.ico `
-    --add-data "icon.png;." --add-data "icon2.png;." --add-data "icon2.ico;." `
+    --onefile --noconsole --icon=icon.ico `
+    --add-data "icon.png;." --add-data "icon.ico;." `
     --name Juggler main.py
 ```
