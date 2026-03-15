@@ -126,7 +126,9 @@ class WindowManager:
             except:
                 pass
             
-            # Then try to bring to front
+            # Allow our process to set foreground, then bring to front
+            import ctypes
+            ctypes.windll.user32.AllowSetForegroundWindow(0xFFFFFFFF)
             win32gui.SetForegroundWindow(hwnd)
             
             return True, "Window activated"

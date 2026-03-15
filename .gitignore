@@ -35,3 +35,7 @@ ENV/
 *.pyc
 *.pyo
 icon.ico
+
+# Release binaries (distributed via GitHub Releases, not committed to repo)
+*.exe
+*.spec
