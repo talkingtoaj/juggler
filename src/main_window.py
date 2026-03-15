@@ -32,7 +32,7 @@ from PyQt6.QtWidgets import (
     QFrame, QMessageBox, QScrollArea, QDialog
 )
 from PyQt6.QtCore import Qt, QSize, pyqtSignal, QTimer, QEvent
-from PyQt6.QtGui import QIcon, QColor, QPalette, QBrush
+from PyQt6.QtGui import QIcon, QColor, QPalette, QBrush, QKeySequence, QShortcut
 
 # Our imports
 from .window_manager import WindowManager, filter_system_windows
@@ -401,6 +401,10 @@ class MainWindow(QMainWindow):
         # Status bar
         self.statusBar().showMessage("Ready")
 
+        # Keyboard shortcuts (documented in README)
+        QShortcut(QKeySequence("F5"), self).activated.connect(self.check_window_validity)
+        QShortcut(QKeySequence("Ctrl+Q"), self).activated.connect(self.close)
+
     def changeEvent(self, event):
         """Auto-prune dead windows when app gains focus."""
         if event.type() == QEvent.Type.WindowActivate:
@@ -530,16 +534,26 @@ class MainWindow(QMainWindow):
         update_pinned_window(hwnd, {"note": note})
 
     def check_window_validity(self):
-        """Auto-remove any pinned windows whose handles are no longer valid."""
+        """Remove closed and duplicate pinned windows."""
         if not WindowManager.is_available():
             return
 
+        # Collect invalid (closed) hwnds from the UI
         to_remove = []
         for i in range(self.pinned_layout.count() - 1):  # Skip stretch
             item = self.pinned_layout.itemAt(i).widget()
             if isinstance(item, PinnedWindowItem):
                 if not WindowManager.is_window_valid(item.hwnd):
                     to_remove.append(item.hwnd)
+
+        # Collect duplicate hwnds from stored data (keep first occurrence)
+        seen = set()
+        for w in get_pinned_windows():
+            hwnd = w.get("hwnd")
+            if hwnd in seen:
+                to_remove.append(hwnd)
+            else:
+                seen.add(hwnd)
 
         if to_remove:
             for hwnd in to_remove:
@@ -553,9 +567,11 @@ class MainWindow(QMainWindow):
     def _dbg(self, msg: str):
         """Append a timestamped line to the debug log."""
         import threading
-        from datetime import datetime
+        from pathlib import Path
         try:
-            with open(r"C:\Users\talki\tmp\cs_debug.txt", "a", encoding="utf-8") as f:
+            log_path = Path.home() / ".juggler" / "debug.txt"
+            log_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(log_path, "a", encoding="utf-8") as f:
                 f.write(f"{datetime.now().strftime('%H:%M:%S.%f')} tid={threading.get_ident()} {msg}\n")
         except Exception:
             pass

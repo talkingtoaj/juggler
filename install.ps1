@@ -1,5 +1,6 @@
-# Juggler — Installer / Uninstaller
-# Run with: Right-click -> Run with PowerShell
+# Juggler - Installer / Uninstaller
+# Single-click: right-click -> Run with PowerShell
+# If Juggler.exe is not next to this script it is downloaded from the latest release.
 
 $AppName      = "Juggler"
 $ExeName      = "Juggler.exe"
@@ -7,14 +8,29 @@ $InstallDir   = "$env:LOCALAPPDATA\Programs\$AppName"
 $StartupKey   = "HKCU:\Software\Microsoft\Windows\CurrentVersion\Run"
 $ShortcutPath = "$env:USERPROFILE\Desktop\Juggler.lnk"
 $SourceExe    = Join-Path $PSScriptRoot $ExeName
+$ReleaseApi   = "https://api.github.com/repos/talkingtoaj/juggler/releases/latest"
 
-function Install {
-    # Check exe is present
-    if (-not (Test-Path $SourceExe)) {
-        Write-Host "ERROR: $ExeName not found next to install.ps1" -ForegroundColor Red
-        Write-Host "Please download $ExeName from the release page and put it in the same folder as this script."
+function Get-LatestExe {
+    Write-Host "  Juggler.exe not found locally - downloading from latest release..." -ForegroundColor Cyan
+    try {
+        $release  = Invoke-RestMethod -Uri $ReleaseApi -UseBasicParsing
+        $asset    = $release.assets | Where-Object { $_.name -eq $ExeName } | Select-Object -First 1
+        if (-not $asset) { throw "No $ExeName asset found in the latest release." }
+        $dest = Join-Path $PSScriptRoot $ExeName
+        Invoke-WebRequest -Uri $asset.browser_download_url -OutFile $dest -UseBasicParsing
+        Write-Host "  Downloaded $ExeName ($([math]::Round($asset.size/1MB,1)) MB)" -ForegroundColor Green
+    } catch {
+        Write-Host "ERROR: Could not download $ExeName - $_" -ForegroundColor Red
+        Write-Host "Please download $ExeName from https://github.com/talkingtoaj/juggler/releases/latest"
+        Write-Host "and place it in the same folder as this script, then run again."
         Pause
         exit 1
+    }
+}
+
+function Install {
+    if (-not (Test-Path $SourceExe)) {
+        Get-LatestExe
     }
 
     Write-Host "Installing Juggler..." -ForegroundColor Cyan
@@ -33,7 +49,7 @@ function Install {
     $Shortcut = $Shell.CreateShortcut($ShortcutPath)
     $Shortcut.TargetPath   = "$InstallDir\$ExeName"
     $Shortcut.IconLocation = "$InstallDir\$ExeName"
-    $Shortcut.Description  = "Juggler — juggle your windows, not your attention"
+    $Shortcut.Description  = "Juggler - juggle your windows, not your attention"
     $Shortcut.Save()
     Write-Host "  Desktop shortcut created" -ForegroundColor Green
 
