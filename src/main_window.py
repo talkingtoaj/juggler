@@ -675,6 +675,7 @@ class MainWindow(QMainWindow):
 
         last_index = get_last_activated_index()
         n = len(pinned)
+        dead_hwnds = []
         for offset in range(1, n + 1):
             next_index = (last_index + offset) % n
             window = pinned[next_index]
@@ -684,7 +685,8 @@ class MainWindow(QMainWindow):
                 continue
             try:
                 if not user32.IsWindow(hwnd):
-                    self._dbg(f"IsWindow=False, skipping")
+                    self._dbg(f"IsWindow=False, removing")
+                    dead_hwnds.append(hwnd)
                     continue
                 if user32.IsIconic(hwnd):
                     user32.ShowWindow(hwnd, 9)  # SW_RESTORE
@@ -692,6 +694,10 @@ class MainWindow(QMainWindow):
                 user32.SetForegroundWindow(hwnd)
                 set_last_activated_index(next_index)
                 self._dbg(f"SetForegroundWindow done for hwnd={hwnd}")
+                if dead_hwnds:
+                    for dead in dead_hwnds:
+                        remove_pinned_window(dead)
+                    self.load_pinned_windows()
                 self.statusBar().showMessage(
                     f"Ctrl+Alt+O → {window.get('title', 'Unknown')[:40]}"
                 )
@@ -699,6 +705,10 @@ class MainWindow(QMainWindow):
             except Exception as e:
                 self._dbg(f"exception on hwnd={hwnd}: {e}")
                 continue
+        if dead_hwnds:
+            for hwnd in dead_hwnds:
+                remove_pinned_window(hwnd)
+            self.load_pinned_windows()
         self._dbg("no valid window found to activate")
 
     def closeEvent(self, event):
