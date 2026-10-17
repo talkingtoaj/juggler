@@ -398,7 +398,12 @@ class MainWindow(QMainWindow):
         scroll.setWidget(self.pinned_container)
         layout.addWidget(scroll)
 
-        # Status bar
+        # Status bar, with a permanent hotkey hint on the right
+        if platform.system() == "Windows":
+            hotkey_hint = QLabel("Ctrl+Alt+O to cycle")
+            hotkey_hint.setToolTip("Press Ctrl+Alt+O anywhere to jump to the next pinned window")
+            hotkey_hint.setStyleSheet("color: #78909C; padding-right: 6px;")
+            self.statusBar().addPermanentWidget(hotkey_hint)
         self.statusBar().showMessage("Ready")
 
         # Keyboard shortcuts (documented in README)
