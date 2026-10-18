@@ -21,8 +21,13 @@ echo   [1] Update / Reinstall
 echo   [2] Uninstall
 echo   [3] Cancel
 echo.
-set /p CHOICE="  Choose (1/2/3): "
-if "%CHOICE%"=="1" goto :install
+choice /c 123 /n /m "  Choose (1/2/3): "
+if errorlevel 3 goto :cancel
+if errorlevel 2 goto :uninstall
+if errorlevel 1 goto :install
+goto :cancel
+
+:install
 if "%CHOICE%"=="2" goto :uninstall
 goto :cancel
 
