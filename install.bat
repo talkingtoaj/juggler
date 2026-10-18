@@ -14,15 +14,19 @@ echo   Juggler Setup
 echo.
 
 REM --- Check for existing install ---
-if exist "%INSTALL_DIR%\%EXE%" (
-    echo   An existing installation was found at %INSTALL_DIR%
-    echo.
-    echo   [1] Update / Reinstall
-    echo   [2] Uninstall
-    echo   [3] Cancel
-    echo.
-    set /p CHOICE="  Choose (1/2/3): "
-    if "%CHOICE%"=="1" goto :install
+if not exist "%INSTALL_DIR%\%EXE%" goto :install
+echo   An existing installation was found at %INSTALL_DIR%
+echo.
+echo   [1] Update / Reinstall
+echo   [2] Uninstall
+echo   [3] Cancel
+echo.
+set /p CHOICE="  Choose (1/2/3): "
+if "%CHOICE%"=="1" goto :install
+if "%CHOICE%"=="2" goto :uninstall
+goto :cancel
+
+:install
     if "%CHOICE%"=="2" goto :uninstall
     goto :cancel
 ) else (
