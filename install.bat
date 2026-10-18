@@ -28,17 +28,6 @@ if errorlevel 1 goto :install
 goto :cancel
 
 :install
-if "%CHOICE%"=="2" goto :uninstall
-goto :cancel
-
-:install
-    if "%CHOICE%"=="2" goto :uninstall
-    goto :cancel
-) else (
-    goto :install
-)
-
-:install
 REM --- Download exe if not next to this script ---
 if not exist "%~dp0%EXE%" (
     echo   Juggler.exe not found locally - downloading from latest release...
